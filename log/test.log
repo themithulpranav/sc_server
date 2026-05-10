@@ -1,0 +1,74 @@
+  [1m[35m (0.7ms)[0m  [1m[34mSELECT sqlite_version(*)[0m
+  [1m[35m (0.6ms)[0m  [1m[34mSELECT sqlite_version(*)[0m
+  [1m[35m (0.0ms)[0m  [1m[34mSELECT sqlite_version(*)[0m
+  [1m[35m (0.0ms)[0m  [1m[34mSELECT sqlite_version(*)[0m
+  [1m[35m (0.1ms)[0m  [1m[35mDROP TABLE IF EXISTS "companies"[0m
+  [1m[35m (1.6ms)[0m  [1m[35mCREATE TABLE "companies" ("id" integer PRIMARY KEY AUTOINCREMENT NOT NULL, "name" varchar, "created_at" datetime NOT NULL, "updated_at" datetime NOT NULL)[0m
+  [1m[35m (0.2ms)[0m  [1m[35mDROP TABLE IF EXISTS "shipment_items"[0m
+  [1m[35m (1.6ms)[0m  [1m[35mCREATE TABLE "shipment_items" ("id" integer PRIMARY KEY AUTOINCREMENT NOT NULL, "description" varchar, "shipment_id" integer, "weight" integer, "created_at" datetime NOT NULL, "updated_at" datetime NOT NULL)[0m
+  [1m[35m (1.3ms)[0m  [1m[35mCREATE INDEX "index_shipment_items_on_shipment_id" ON "shipment_items" ("shipment_id")[0m
+  [1m[35m (0.2ms)[0m  [1m[35mDROP TABLE IF EXISTS "shipments"[0m
+  [1m[35m (1.4ms)[0m  [1m[35mCREATE TABLE "shipments" ("id" integer PRIMARY KEY AUTOINCREMENT NOT NULL, "company_id" integer, "destination_country" varchar, "origin_country" varchar, "tracking_number" varchar, "slug" varchar, "created_at" datetime NOT NULL, "updated_at" datetime NOT NULL)[0m
+  [1m[35m (1.4ms)[0m  [1m[35mCREATE INDEX "index_shipments_on_company_id" ON "shipments" ("company_id")[0m
+  [1m[36mTRANSACTION (0.0ms)[0m  [1m[36mbegin transaction[0m
+  [1m[35m (0.0ms)[0m  [1m[35mPRAGMA foreign_keys[0m
+  [1m[35m (0.0ms)[0m  [1m[35mPRAGMA defer_foreign_keys[0m
+  [1m[35m (0.0ms)[0m  [1m[35mPRAGMA defer_foreign_keys = ON[0m
+  [1m[35m (0.0ms)[0m  [1m[35mPRAGMA foreign_keys = OFF[0m
+  [1m[35m (0.1ms)[0m  [1m[35mCREATE TEMPORARY TABLE "ashipment_items" ("id" integer NOT NULL PRIMARY KEY, "description" varchar DEFAULT NULL, "shipment_id" integer DEFAULT NULL, "weight" integer DEFAULT NULL, "created_at" datetime NOT NULL, "updated_at" datetime NOT NULL)[0m
+  [1m[35m (0.1ms)[0m  [1m[35mCREATE INDEX "tindex_ashipment_items_on_shipment_id" ON "ashipment_items" ("shipment_id")[0m
+  [1m[35m (0.0ms)[0m  [1m[32mINSERT INTO "ashipment_items" ("id","description","shipment_id","weight","created_at","updated_at")
+                     SELECT "id","description","shipment_id","weight","created_at","updated_at" FROM "shipment_items"[0m
+  [1m[35m (1.0ms)[0m  [1m[35mDROP TABLE "shipment_items"[0m
+  [1m[35m (0.1ms)[0m  [1m[35mCREATE TABLE "shipment_items" ("id" integer NOT NULL PRIMARY KEY, "description" varchar DEFAULT NULL, "shipment_id" integer DEFAULT NULL, "weight" integer DEFAULT NULL, "created_at" datetime NOT NULL, "updated_at" datetime NOT NULL, CONSTRAINT "fk_rails_952bea952c"
+FOREIGN KEY ("shipment_id")
+  REFERENCES "shipments" ("id")
+)[0m
+  [1m[35m (0.0ms)[0m  [1m[35mCREATE INDEX "index_shipment_items_on_shipment_id" ON "shipment_items" ("shipment_id")[0m
+  [1m[35m (0.0ms)[0m  [1m[32mINSERT INTO "shipment_items" ("id","description","shipment_id","weight","created_at","updated_at")
+                     SELECT "id","description","shipment_id","weight","created_at","updated_at" FROM "ashipment_items"[0m
+  [1m[35m (0.1ms)[0m  [1m[35mDROP TABLE "ashipment_items"[0m
+  [1m[35m (0.0ms)[0m  [1m[35mPRAGMA defer_foreign_keys = 0[0m
+  [1m[35m (0.0ms)[0m  [1m[35mPRAGMA foreign_keys = 1[0m
+  [1m[36mTRANSACTION (1.0ms)[0m  [1m[36mcommit transaction[0m
+  [1m[36mTRANSACTION (0.0ms)[0m  [1m[36mbegin transaction[0m
+  [1m[35m (0.0ms)[0m  [1m[35mPRAGMA foreign_keys[0m
+  [1m[35m (0.0ms)[0m  [1m[35mPRAGMA defer_foreign_keys[0m
+  [1m[35m (0.0ms)[0m  [1m[35mPRAGMA defer_foreign_keys = ON[0m
+  [1m[35m (0.0ms)[0m  [1m[35mPRAGMA foreign_keys = OFF[0m
+  [1m[35m (0.1ms)[0m  [1m[35mCREATE TEMPORARY TABLE "ashipments" ("id" integer NOT NULL PRIMARY KEY, "company_id" integer DEFAULT NULL, "destination_country" varchar DEFAULT NULL, "origin_country" varchar DEFAULT NULL, "tracking_number" varchar DEFAULT NULL, "slug" varchar DEFAULT NULL, "created_at" datetime NOT NULL, "updated_at" datetime NOT NULL)[0m
+  [1m[35m (0.1ms)[0m  [1m[35mCREATE INDEX "tindex_ashipments_on_company_id" ON "ashipments" ("company_id")[0m
+  [1m[35m (0.0ms)[0m  [1m[32mINSERT INTO "ashipments" ("id","company_id","destination_country","origin_country","tracking_number","slug","created_at","updated_at")
+                     SELECT "id","company_id","destination_country","origin_country","tracking_number","slug","created_at","updated_at" FROM "shipments"[0m
+  [1m[35m (0.9ms)[0m  [1m[35mDROP TABLE "shipments"[0m
+  [1m[35m (0.1ms)[0m  [1m[35mCREATE TABLE "shipments" ("id" integer NOT NULL PRIMARY KEY, "company_id" integer DEFAULT NULL, "destination_country" varchar DEFAULT NULL, "origin_country" varchar DEFAULT NULL, "tracking_number" varchar DEFAULT NULL, "slug" varchar DEFAULT NULL, "created_at" datetime NOT NULL, "updated_at" datetime NOT NULL, CONSTRAINT "fk_rails_bb9a26007c"
+FOREIGN KEY ("company_id")
+  REFERENCES "companies" ("id")
+)[0m
+  [1m[35m (0.1ms)[0m  [1m[35mCREATE INDEX "index_shipments_on_company_id" ON "shipments" ("company_id")[0m
+  [1m[35m (0.0ms)[0m  [1m[32mINSERT INTO "shipments" ("id","company_id","destination_country","origin_country","tracking_number","slug","created_at","updated_at")
+                     SELECT "id","company_id","destination_country","origin_country","tracking_number","slug","created_at","updated_at" FROM "ashipments"[0m
+  [1m[35m (0.1ms)[0m  [1m[35mDROP TABLE "ashipments"[0m
+  [1m[35m (0.0ms)[0m  [1m[35mPRAGMA defer_foreign_keys = 0[0m
+  [1m[35m (0.0ms)[0m  [1m[35mPRAGMA foreign_keys = 1[0m
+  [1m[36mTRANSACTION (0.9ms)[0m  [1m[36mcommit transaction[0m
+  [1m[35m (1.2ms)[0m  [1m[35mCREATE TABLE "schema_migrations" ("version" varchar NOT NULL PRIMARY KEY)[0m
+  [1m[35m (0.1ms)[0m  [1m[34mSELECT "schema_migrations"."version" FROM "schema_migrations" ORDER BY "schema_migrations"."version" ASC[0m
+  [1m[35m (1.6ms)[0m  [1m[32mINSERT INTO "schema_migrations" (version) VALUES (20170815024201)[0m
+  [1m[35m (1.4ms)[0m  [1m[32mINSERT INTO "schema_migrations" (version) VALUES
+(20170815023125),
+(20170815023845);
+
+[0m
+  [1m[35m (1.5ms)[0m  [1m[35mCREATE TABLE "ar_internal_metadata" ("key" varchar NOT NULL PRIMARY KEY, "value" varchar, "created_at" datetime(6) NOT NULL, "updated_at" datetime(6) NOT NULL)[0m
+  [1m[36mActiveRecord::InternalMetadata Load (0.2ms)[0m  [1m[34mSELECT "ar_internal_metadata".* FROM "ar_internal_metadata" WHERE "ar_internal_metadata"."key" = ? LIMIT ?[0m  [["key", "environment"], ["LIMIT", 1]]
+  [1m[36mTRANSACTION (0.0ms)[0m  [1m[36mbegin transaction[0m
+  [1m[36mActiveRecord::InternalMetadata Create (0.8ms)[0m  [1m[32mINSERT INTO "ar_internal_metadata" ("key", "value", "created_at", "updated_at") VALUES (?, ?, ?, ?)[0m  [["key", "environment"], ["value", "test"], ["created_at", "2026-04-27 15:20:40.337647"], ["updated_at", "2026-04-27 15:20:40.337647"]]
+  [1m[36mTRANSACTION (1.1ms)[0m  [1m[36mcommit transaction[0m
+  [1m[36mActiveRecord::InternalMetadata Load (0.1ms)[0m  [1m[34mSELECT "ar_internal_metadata".* FROM "ar_internal_metadata" WHERE "ar_internal_metadata"."key" = ? LIMIT ?[0m  [["key", "environment"], ["LIMIT", 1]]
+  [1m[36mActiveRecord::InternalMetadata Load (0.1ms)[0m  [1m[34mSELECT "ar_internal_metadata".* FROM "ar_internal_metadata" WHERE "ar_internal_metadata"."key" = ? LIMIT ?[0m  [["key", "schema_sha1"], ["LIMIT", 1]]
+  [1m[36mTRANSACTION (0.0ms)[0m  [1m[36mbegin transaction[0m
+  [1m[36mActiveRecord::InternalMetadata Create (1.0ms)[0m  [1m[32mINSERT INTO "ar_internal_metadata" ("key", "value", "created_at", "updated_at") VALUES (?, ?, ?, ?)[0m  [["key", "schema_sha1"], ["value", "73fd9e6ca046785cba62102b33c7528ea43e40c2"], ["created_at", "2026-04-27 15:20:40.343459"], ["updated_at", "2026-04-27 15:20:40.343459"]]
+  [1m[36mTRANSACTION (1.2ms)[0m  [1m[36mcommit transaction[0m
+  [1m[35m (0.0ms)[0m  [1m[34mSELECT sqlite_version(*)[0m
+  [1m[35m (0.2ms)[0m  [1m[34mSELECT "schema_migrations"."version" FROM "schema_migrations" ORDER BY "schema_migrations"."version" ASC[0m
