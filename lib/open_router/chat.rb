@@ -42,9 +42,21 @@ module OpenRouter
         }
       )
 
+      served_model  = response.dig("model")
+      finish_reason = response.dig("choices", 0, "finish_reason")
+      usage         = response.dig("usage")
+      Rails.logger.info(
+        "[OpenRouter::Chat] response served_model=#{served_model.inspect} " \
+        "finish_reason=#{finish_reason.inspect} usage=#{usage.inspect}"
+      )
+
       text = response.dig("choices", 0, "message", "content").to_s
       if text.blank?
-        raise "OpenRouter::Chat received empty content: #{response.inspect}"
+        Rails.logger.error(
+          "[OpenRouter::Chat] empty content from API (requested=#{model.inspect} " \
+          "served=#{served_model.inspect}). Returning {} sentinel. response=#{response.inspect}"
+        )
+        return {}
       end
 
       cleaned = clean_json_block(text)
@@ -52,9 +64,17 @@ module OpenRouter
         begin
           JSON.parse(cleaned)
         rescue JSON::ParserError
-          parse_first_json_object(cleaned) ||
-            (raise "OpenRouter::Chat could not parse JSON from response: #{text.inspect}")
+          parse_first_json_object(cleaned)
         end
+
+      if parsed.nil?
+        Rails.logger.error(
+          "[OpenRouter::Chat] could not parse JSON from response " \
+          "(requested=#{model.inspect} served=#{served_model.inspect} " \
+          "finish_reason=#{finish_reason.inspect}). Returning {} sentinel. raw=#{text.inspect}"
+        )
+        return {}
+      end
 
       Rails.logger.info("[OpenRouter::Chat] parsed content: #{parsed.inspect}")
 
@@ -75,7 +95,7 @@ module OpenRouter
     def self.cache_file_path(model, cache_key)
       slug = model.to_s.gsub(/[^\w.\-]+/, "_")
       digest = Digest::SHA256.hexdigest("#{model}\n#{cache_key}")
-      Rails.root.join("tmp", "cache", "open_router", "#{slug}_#{digest}.json")
+      Rails.root.join("tmp", "cache1", "open_router", "#{slug}_#{digest}.json")
     end
     private_class_method :cache_file_path
 

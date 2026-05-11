@@ -23,7 +23,7 @@ RUN apt-get clean && rm -rf /var/lib/apt/lists/* && \
       fonts-liberation \
       fonts-noto-color-emoji \
     && npm install -g playwright@1.16.1 \
-    && pip3 install --no-cache-dir pdfplumber \
+    && pip3 install --no-cache-dir pdfplumber sentence-transformers \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* /var/cache/apt/archives/*
 

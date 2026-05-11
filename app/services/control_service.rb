@@ -3,6 +3,7 @@ require "set"
 
 class ControlService
   USE_LLM_FILE_CACHE = false
+  CANDIDATE_RETRIEVAL_CONFIG = { strategy: :top_k, k: 4 }.freeze
 
   def initialize(source_control_csv:, trust_pdf_doc:, trust_center_url:)
     @csv_file = source_control_csv
@@ -15,12 +16,19 @@ class ControlService
     pdf_extracted = extract_pdf_controls
     url_extracted = extract_url_controls
 
+    embeddings = run_embeddings_pass(sources, pdf_extracted, url_extracted)
+    similarity = (run_similarity_pass(embeddings) if embeddings)
+    candidates = (run_candidate_retrieval_pass(similarity) if similarity)
+
+    pdf_mappings = semantic_map(sources, pdf_extracted, candidates&.dig(:pdf_candidates), map_kind: "PNC")
+    url_mappings = semantic_map(sources, url_extracted, candidates&.dig(:url_candidates), map_kind: "UNC")
+
     {
       source_controls: sources.map(&:to_h),
       pdf_extracted_controls: pdf_extracted.map(&:to_h),
       url_extracted_controls: url_extracted.map(&:to_h),
-      pdf_control_mappings: semantic_map(sources, pdf_extracted, map_kind: "PNC"),
-      url_control_mappings: semantic_map(sources, url_extracted, map_kind: "UNC")
+      pdf_control_mappings: pdf_mappings,
+      url_control_mappings: url_mappings
     }
   end
 
@@ -28,6 +36,102 @@ class ControlService
 
   def log(msg)
     Rails.logger.info("[ControlService] #{msg}")
+  end
+
+  def run_embeddings_pass(sources, pdf_extracted, url_extracted)
+    source_texts = sources.map(&:normalised_control_text)
+    pdf_texts = pdf_extracted.map(&:control_text)
+    url_texts = url_extracted.map(&:control_text)
+
+    if source_texts.empty? && pdf_texts.empty? && url_texts.empty?
+      log("[embeddings] skip: no source or extracted texts")
+      return nil
+    end
+
+    t0 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    result = Representors::Factory.build.embed_control_corpus(
+      source_texts: source_texts,
+      pdf_extracted_texts: pdf_texts,
+      url_extracted_texts: url_texts
+    )
+    elapsed_ms = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - t0) * 1000).round(1)
+    log(
+      "[embeddings] model=#{result[:model]} dim=#{result[:dim]} " \
+      "src=#{source_texts.size} pdf=#{pdf_texts.size} url=#{url_texts.size} elapsed_ms=#{elapsed_ms}" \
+      "result=#{result.inspect}"
+    )
+    result
+  end
+
+  def run_similarity_pass(embeddings)
+    source_embs = Array(embeddings[:source_embeddings])
+    pdf_embs = Array(embeddings[:pdf_extracted_embeddings])
+    url_embs = Array(embeddings[:url_extracted_embeddings])
+
+    if source_embs.empty? || (pdf_embs.empty? && url_embs.empty?)
+      log(
+        "[similarity] skip: source=#{source_embs.size} pdf=#{pdf_embs.size} url=#{url_embs.size}"
+      )
+      return nil
+    end
+
+    strategy = SimilarityScoring::Factory.build(:cosine)
+
+    t0 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    pdf_scores = strategy.score(source_embeddings: source_embs, target_embeddings: pdf_embs)
+    url_scores = strategy.score(source_embeddings: source_embs, target_embeddings: url_embs)
+    elapsed_ms = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - t0) * 1000).round(1)
+
+    log(
+      "[similarity] strategy=cosine " \
+      "pdf_shape=#{matrix_shape(pdf_scores)} url_shape=#{matrix_shape(url_scores)} " \
+      "pdf_sample=#{matrix_sample(pdf_scores)} url_sample=#{matrix_sample(url_scores)} " \
+      "elapsed_ms=#{elapsed_ms}"
+    )
+
+    { pdf_scores: pdf_scores, url_scores: url_scores }
+  end
+
+  def run_candidate_retrieval_pass(similarity)
+    return nil if similarity.nil?
+
+    pdf_scores = Array(similarity[:pdf_scores])
+    url_scores = Array(similarity[:url_scores])
+
+    strategy = CandidateRetrieval::Factory.build(**CANDIDATE_RETRIEVAL_CONFIG)
+
+    t0 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
+    pdf_candidates = strategy.select(scores: pdf_scores)
+    url_candidates = strategy.select(scores: url_scores)
+    elapsed_ms = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - t0) * 1000).round(1)
+
+    log(
+      "[retrieval] config=#{CANDIDATE_RETRIEVAL_CONFIG.inspect} " \
+      "pdf_sources=#{pdf_candidates.size} pdf_total=#{pdf_candidates.sum(&:size)} " \
+      "url_sources=#{url_candidates.size} url_total=#{url_candidates.sum(&:size)} " \
+      "pdf_sample=#{candidates_sample(pdf_candidates)} url_sample=#{candidates_sample(url_candidates)} " \
+      "elapsed_ms=#{elapsed_ms}"
+    )
+
+    { pdf_candidates: pdf_candidates, url_candidates: url_candidates }
+  end
+
+  def candidates_sample(candidates)
+    return "[]" if candidates.empty?
+
+    candidates.first.inspect
+  end
+
+  def matrix_shape(matrix)
+    rows = matrix.length
+    cols = rows.zero? ? 0 : matrix.first.length
+    "#{rows}x#{cols}"
+  end
+
+  def matrix_sample(matrix)
+    return "[]" if matrix.empty?
+
+    matrix.inspect
   end
 
   def parse_source_controls
@@ -116,24 +220,45 @@ class ControlService
     end
   end
 
-  def semantic_map(source_controls, extracted_controls, map_kind:)
+  def semantic_map(source_controls, extracted_controls, candidates, map_kind:)
     if source_controls.empty? || extracted_controls.empty?
-      log("[semantic_map] skip LLM: source_empty=#{source_controls.empty?} extracted_empty=#{extracted_controls.empty?}")
+      log(
+        "[semantic_map][#{map_kind}] skip LLM: " \
+        "source_empty=#{source_controls.empty?} extracted_empty=#{extracted_controls.empty?}"
+      )
       return empty_mapping_payload(source_controls, extracted_controls)
     end
 
-    prompt = PromptGenerators::SemanticMatching.new(
-      source_controls: source_controls,
-      extracted_controls: extracted_controls
-    ).generate
-    log("[semantic_map] generated prompt (#{prompt.length} chars)")
+    cands = Array(candidates)
+    if cands.empty? || cands.all? { |row| Array(row).empty? }
+      log("[semantic_map][#{map_kind}] skip LLM: no candidates for any source")
+      return empty_mapping_payload(source_controls, extracted_controls)
+    end
 
+    sources_with_candidates = cands.count { |row| Array(row).any? }
+    total_candidates = cands.sum { |row| Array(row).size }
+
+    prompt = PromptGenerators::CandidateMatching.new(
+      source_controls: source_controls,
+      extracted_controls: extracted_controls,
+      candidates: cands
+    ).generate
+    log(
+      "[semantic_map][#{map_kind}] generated prompt chars=#{prompt.length} " \
+      "sources_with_candidates=#{sources_with_candidates} total_candidates=#{total_candidates}"
+    )
+
+    t0 = Process.clock_gettime(Process::CLOCK_MONOTONIC)
     raw = llm_chat(prompt, semantic_llm_cache_key(map_kind))
-    log("[semantic_map] AI mapping payload: #{raw.inspect}")
+    elapsed_ms = ((Process.clock_gettime(Process::CLOCK_MONOTONIC) - t0) * 1000).round(1)
+    log("[semantic_map][#{map_kind}] AI mapping payload: #{raw.inspect} elapsed_ms=#{elapsed_ms}")
 
     mappings = normalize_mappings(
       raw["mappings"] || raw[:mappings],
       source_controls
+    )
+    mappings = drop_hallucinated_candidates(
+      mappings, source_controls, extracted_controls, cands, map_kind: map_kind
     )
     enrich_unmatched(mappings, source_controls, extracted_controls)
   end
@@ -145,11 +270,11 @@ class ControlService
   def extract_llm_cache_key(input:, type:)
     case type
     when :pdf
-      "extract-pdf-#{input.try(:original_filename).presence || "pdf"}"
+      "extract1-pdf-#{input.try(:original_filename).presence || "pdf"}"
     when :url
-      "extract-url-#{input.to_s.strip}"
+      "extract1-url-#{input.to_s.strip}"
     else
-      "extract-#{type}"
+      "extract1-#{type}"
     end
   end
 
@@ -158,7 +283,7 @@ class ControlService
   end
 
   def semantic_llm_cache_key(map_kind)
-    "semantic-#{map_kind}-#{csv_cache_label}"
+    "semantic-candidates-#{map_kind}-#{csv_cache_label}"
   end
 
   def empty_mapping_payload(source_controls, extracted_controls)
@@ -236,6 +361,39 @@ class ControlService
 
     log("[semantic_map] unknown match_type #{raw.inspect}, coercing to partial")
     "partial"
+  end
+
+  def drop_hallucinated_candidates(mappings, source_controls, extracted_controls, candidates, map_kind:)
+    allowed_per_source = candidates.map do |row|
+      Array(row).map { |c| extracted_controls[c[:target_index]]&.control_id }.compact.to_set
+    end
+
+    mappings.map do |m|
+      idx = m[:source_row_index]
+      unless idx.is_a?(Integer) && idx >= 0 && idx < source_controls.length
+        log("[semantic_map][#{map_kind}] dropping mapping with invalid source_row_index=#{idx.inspect}")
+        next nil
+      end
+
+      allowed   = allowed_per_source[idx] || Set.new
+      raw_ids   = Array(m[:normalized_common_control_ids])
+      valid_ids = raw_ids.select { |id| allowed.include?(id) }
+      dropped   = raw_ids - valid_ids
+
+      if dropped.any?
+        log(
+          "[semantic_map][#{map_kind}] dropping hallucinated ids " \
+          "#{dropped.inspect} for source_row_index=#{idx}"
+        )
+      end
+
+      if valid_ids.empty?
+        log("[semantic_map][#{map_kind}] dropping mapping for source_row_index=#{idx}: no valid ids after filtering")
+        next nil
+      end
+
+      m.merge(normalized_common_control_ids: valid_ids)
+    end.compact
   end
 
   def enrich_unmatched(mappings, source_controls, extracted_controls)

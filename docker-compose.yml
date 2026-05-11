@@ -3,7 +3,7 @@ version: "3.9"
 services:
   redis:
     image: redis:7
-    container_name: sm3_redis
+    container_name: sc_redis
     ports:
       - "6379:6379"
 
@@ -11,7 +11,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.boot
-    container_name: sm3_server
+    container_name: sc_server
     volumes:
       - .:/app
       - sqlite_data:/app/storage

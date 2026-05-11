@@ -34,3 +34,53 @@ To learn
 - RSpec
 - Concerns (Model, Controller)
 - Views (Mail template)
+
+
+Initial approach V0
+1. Extract text
+2. Use LLM to identify control text
+3. Use LLM to Map and give rationale on mappings
+
+V1 
+1. Extract text
+2. Refine extracted text - remove noise, titles and keep only relevant text
+3. Form a block structure for each extracted text
+4. Use LLM to identify controls given a list of extracted texts
+5. Use LLM to map and give rationale on mappings -
+
+V2
+1. Extract text
+2. Refine extracted text - remove noise, titles and keep only relevant text
+3. Form a block structure for each extracted text
+4. Use LLM to identify controls given a list of extracted texts
+5. Use embeddings and cosine similarity concepts to map source normalised controls and extracted controls
+6. Take the top 50% or 60% contenders and use AI to find semantic matching - (Can avoid LLM for cases where cosine similarity is > 90% - 95%)
+7. Use AI for semantic and rationale in the above step
+
+
+Observations
+1. Quality of output after refining extracted text - increased significantly
+2. V2 is required as AI will have to evaluate N * M combinations of SC and NC - this is very expensive 
+
+
+Downsides
+1. Multiline controls like "The below controls are not in place" and then line 1 - control 1, line 2 - control 2 and line 3 - control 3 - will fail
+
+
+Future scope
+1. Multi source processing - Only PDF and URL support as of now
+2. Async processing pipelines
+3. More structured extraction - Extract data from source and map it to groups like Authentication, Encryptions
+
+
+## Embeddings (sentence-transformers)
+
+`ControlService` runs [`scripts/embed_texts.py`](scripts/embed_texts.py) once per request (via `Representors::Strategies::SentenceTransformers`) to generate vectors used for logging today and for similarity work later. The host `python3` must match the one Rails invokes.
+
+Install Python dependencies (same as Docker `Dockerfile.boot`):
+
+```bash
+pip3 install --no-cache-dir pdfplumber sentence-transformers
+```
+
+The first run downloads the `all-MiniLM-L6-v2` model weights (network required).
