@@ -44,12 +44,42 @@ module Gemini
       end
 
       raw = JSON.parse(response.body)
+
+      served_model  = raw.dig("modelVersion")
+      finish_reason = raw.dig("candidates", 0, "finishReason")
+      usage         = raw.dig("usageMetadata")
+      Rails.logger.info(
+        "[Gemini::Chat] response served_model=#{served_model.inspect} " \
+        "finish_reason=#{finish_reason.inspect} usage=#{usage.inspect}"
+      )
+
       text = raw.dig("candidates", 0, "content", "parts", 0, "text").to_s
       if text.blank?
-        raise "Gemini::Chat received empty text: #{raw.inspect}"
+        Rails.logger.error(
+          "[Gemini::Chat] empty text from API (requested=#{model.inspect} " \
+          "served=#{served_model.inspect} finish_reason=#{finish_reason.inspect}). " \
+          "Returning {} sentinel. response=#{raw.inspect}"
+        )
+        return {}
       end
 
-      parsed = JSON.parse(clean_json_block(text))
+      cleaned = clean_json_block(text)
+      parsed =
+        begin
+          JSON.parse(cleaned)
+        rescue JSON::ParserError
+          nil
+        end
+
+      if parsed.nil?
+        Rails.logger.error(
+          "[Gemini::Chat] could not parse JSON from response " \
+          "(requested=#{model.inspect} served=#{served_model.inspect} " \
+          "finish_reason=#{finish_reason.inspect}). Returning {} sentinel. raw=#{text.inspect}"
+        )
+        return {}
+      end
+
       Rails.logger.info("[Gemini::Chat] parsed content: #{parsed.inspect}")
 
       if path

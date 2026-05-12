@@ -84,3 +84,9 @@ pip3 install --no-cache-dir pdfplumber sentence-transformers
 ```
 
 The first run downloads the `all-MiniLM-L6-v2` model weights (network required).
+
+
+M - control text
+N - extracted control text
+
+M * N

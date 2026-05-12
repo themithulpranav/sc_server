@@ -24,6 +24,10 @@ services:
       GEMINI_API_KEY: xxx
       OPENROUTER_API_KEY: xxx
       OPENROUTER_MODEL: openrouter/free
+      # LLM_PROVIDER selects the live provider for every LLM call (extract + semantic_map).
+      # Values: "gemini" or "openrouter". Defaults to "openrouter" if unset.
+      LLM_PROVIDER: gemini
+      GEMINI_MODEL: gemini-2.5-flash-lite   # optional explicit pin; default in lib/gemini/chat.rb
     stdin_open: true
     tty: true
 

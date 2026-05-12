@@ -264,17 +264,17 @@ class ControlService
   end
 
   def llm_chat(prompt, cache_key)
-    OpenRouter::Chat.call(prompt, cache_key: USE_LLM_FILE_CACHE ? cache_key : nil)
+    Llm::Chat.call(prompt, cache_key: USE_LLM_FILE_CACHE ? cache_key : nil)
   end
 
   def extract_llm_cache_key(input:, type:)
     case type
     when :pdf
-      "extract1-pdf-#{input.try(:original_filename).presence || "pdf"}"
+      "extract2-pdf-#{input.try(:original_filename).presence || "pdf"}"
     when :url
-      "extract1-url-#{input.to_s.strip}"
+      "extract2-url-#{input.to_s.strip}"
     else
-      "extract1-#{type}"
+      "extract2-#{type}"
     end
   end
 
